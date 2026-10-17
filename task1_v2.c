@@ -2,6 +2,7 @@
 #include <mpi.h>
 #include <omp.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define IN_USE 1
 #define FREE 0
@@ -11,6 +12,8 @@
 #define DEPARTURE_PROB 2
 
 #define NUM_OF_CHARGERS 4
+#define BOOKKEEPER 0
+#define TIMESTAMP_FREQ 5    //Seconds
 
 typedef struct {
     int rank, x, y;
@@ -20,6 +23,46 @@ typedef struct {
     int *chargerStatus;
 
 }node;
+
+void node_bookkeeper(node *currNode){
+
+    time_t currentTime;
+    struct tm t;
+
+    while(1){
+
+        sleep(2);
+
+        currentTime = time(NULL);
+        localtime_r(&currentTime, &t);
+
+        int year = t.tm_year + 1900;
+        int month = t.tm_mon + 1;
+        int day = t.tm_mday;
+        int hour = t.tm_hour;
+        int minute = t.tm_min;
+        int second = t.tm_sec;
+
+        int available = 0;
+
+        for(int i = 0; i < currNode->numChargers; i++){
+
+            if(currNode->chargerStatus[i] == FREE){
+                available++;
+            }
+
+        }
+
+
+
+        printf("|Node %d| %04d | %02d | %02d | %02d | %02d | %02d | Available = %d|\n",
+            currNode->rank, year, month, day, hour, minute, second, available);
+
+
+        printf("");
+
+    }
+}
 
 
 void charger_thread(int chargerID, int *chargerStatus, int nodeID){
@@ -36,13 +79,13 @@ void charger_thread(int chargerID, int *chargerStatus, int nodeID){
         if(chargerStatus[chargerID] == FREE){
             if(randVal <= ARRIVAL_PROB){
                 chargerStatus[chargerID] = IN_USE;
-                printf("Charger %d status: %d\n", chargerID, chargerStatus[chargerID]);
+                //printf("Charger %d status: %d\n", chargerID, chargerStatus[chargerID]);
             }
         }
         else {
             if(randVal <= DEPARTURE_PROB){
                 chargerStatus[chargerID] = FREE;
-                printf("Charger %d status: %d\n", chargerID + (nodeID * NUM_OF_CHARGERS), chargerStatus[chargerID]);
+                //printf("Charger %d status: %d\n", chargerID + (nodeID * NUM_OF_CHARGERS), chargerStatus[chargerID]);
             }
         }
 
@@ -91,12 +134,18 @@ int main(int argc, char *argv[]) {
     printf("Node %d: Row %d, Column %d\n",
            rank, currNode.y, currNode.x);
 
-    //Start threads
-    #pragma omp parallel num_threads(currNode.numChargers)
+    //Start threads, +1 for the main thread (bookkeeper)
+    #pragma omp parallel num_threads(currNode.numChargers + 1)
     {
-        int chargerID = omp_get_thread_num();
+        int threadID = omp_get_thread_num();
 
-        charger_thread(chargerID, currNode.chargerStatus, currNode.rank);
+        if(threadID == BOOKKEEPER){
+            node_bookkeeper(&currNode);
+        }
+        else{
+            charger_thread(threadID, currNode.chargerStatus, currNode.rank);
+        }
+
     }
 
     free(currNode.chargerStatus);
