@@ -6,11 +6,11 @@
 #include <unistd.h>
 
 #define IN_USE 1
-#define FREE 0
+#define FREE -1
 
 //Probability of EV arriving/departing  (value x 10) %
-#define ARRIVAL_PROB 3
-#define DEPARTURE_PROB 2
+#define ARRIVAL_PROB 7
+#define DEPARTURE_PROB 3
 
 #define NUM_OF_CHARGERS 4
 #define BOOKKEEPER 0
@@ -21,6 +21,10 @@
 #define RESPONSE_TAG 2      //Response message tag
 
 #define NUM_OF_NEIGHBOURS 4
+
+typedef struct{
+    int carID;
+}car;
 
 typedef struct {
     //(0,0) is top left
@@ -154,10 +158,37 @@ void node_bookkeeper(node *currNode){
     struct tm t;
 
     double lastCheck = MPI_Wtime();
-
+    int nextCarID = 0;
     while(1){
 
         prob_inbox(currNode);
+        
+        //Spawn car?
+        int randVal = rand() % 10;
+
+        if (randVal < ARRIVAL_PROB){
+            //Spawn new car
+            car newCar;
+            newCar.carID = currNode->rank * 100000 + nextCarID;        //Unqiue assuming each node does contain 100 thousand cars
+            nextCarID++;
+
+            //Find available:
+            int availableChargerID = NULL;
+            for(int i = 0; i<NUM_OF_CHARGERS; i++){
+                if(currNode->chargerStatus[i] == FREE){
+                    availableChargerID = i;
+                    break
+                }
+            }
+
+            int available = count_available(currNode);
+
+            if(availableChargerID != NULL && available < AVAILABILITY_THRESHOLD){
+                //help
+            }
+
+
+        }
 
         if(MPI_Wtime() - lastCheck >= TIMESTAMP_FREQ){
             lastCheck = MPI_Wtime();
@@ -186,7 +217,7 @@ void node_bookkeeper(node *currNode){
             }
 
         }
-    usleep(10000);
+        sleep(1);
 
 
     }
